@@ -1,7 +1,7 @@
 import prisma from '../../shared/config/prisma';
 
 export const getDashboardStats = async (userId: number) => {
-  const [totalProjects, myTasks, recentTasks, projectStats] = await Promise.all([
+  const [totalProjects, myTasks, allProjectTasks, recentTasks, projectStats] = await Promise.all([
     prisma.project.count({
       where: { members: { some: { userId } } },
     }),
@@ -10,6 +10,11 @@ export const getDashboardStats = async (userId: number) => {
       by: ['statusId'],
       where: { assigneeId: userId },
       _count: { id: true },
+    }),
+
+    prisma.task.findMany({
+      where: { project: { members: { some: { userId } } } },
+      select: { status: { select: { name: true } } },
     }),
 
     prisma.task.findMany({
@@ -55,13 +60,8 @@ export const getDashboardStats = async (userId: number) => {
     count: g._count.id,
   }));
 
-  const openTasks = myTasks
-    .filter((g) => statusNameById[g.statusId] !== 'Done')
-    .reduce((sum, g) => sum + g._count.id, 0);
-
-  const doneTasks = myTasks
-    .filter((g) => statusNameById[g.statusId] === 'Done')
-    .reduce((sum, g) => sum + g._count.id, 0);
+  const openTasks = allProjectTasks.filter((t) => t.status.name !== 'Done').length;
+  const doneTasks = allProjectTasks.filter((t) => t.status.name === 'Done').length;
 
   const projects = projectStats.map((p) => {
     const total = p.tasks.length;
